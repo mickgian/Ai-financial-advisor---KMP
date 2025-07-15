@@ -12,7 +12,7 @@ plugins {
     alias(libs.plugins.kotlinMultiplatform)
     alias(libs.plugins.kotlinxSerialization)
     id("com.android.library")
-    id("com.codingfeline.buildkonfig") version "+"
+    id("com.codingfeline.buildkonfig") version "0.15.0"
 }
 
 version = "1.0"
@@ -125,8 +125,8 @@ android {
         minSdk = 24
     }
     compileOptions {
-        sourceCompatibility = JavaVersion.VERSION_19
-        targetCompatibility = JavaVersion.VERSION_19
+        sourceCompatibility = JavaVersion.VERSION_21
+        targetCompatibility = JavaVersion.VERSION_21
     }
     composeOptions {
         kotlinCompilerExtensionVersion = "1.5.0"
