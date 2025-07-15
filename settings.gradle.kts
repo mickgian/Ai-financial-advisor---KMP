@@ -33,7 +33,7 @@ dependencyResolutionManagement {
     }
 }
 
-rootProject.name = "TravelAppKMP"
+rootProject.name = "TaxAI"
 
 include(":desktopApp")
 include(":webApp")
