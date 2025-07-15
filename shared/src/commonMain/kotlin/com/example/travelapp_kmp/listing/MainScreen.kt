@@ -69,8 +69,8 @@ import coil3.compose.AsyncImage
 import com.example.travelapp_kmp.style.TravelAppColors
 import org.jetbrains.compose.resources.DrawableResource
 import org.jetbrains.compose.resources.painterResource
-import travelappkmp.shared.generated.resources.Res
-import travelappkmp.shared.generated.resources.sort_icon
+import taxai.shared.generated.resources.Res
+import taxai.shared.generated.resources.sort_icon
 
 
 @Composable
