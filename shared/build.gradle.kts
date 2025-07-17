@@ -60,7 +60,17 @@ kotlin {
     }
 
     sourceSets {
+        all {
+            languageSettings {
+                optIn("kotlin.uuid.ExperimentalUuidApi")
+            }
+        }
+
         commonMain {
+            languageSettings {
+                languageVersion = "2.1"
+                apiVersion      = "2.1"
+            }
             dependencies {
                 implementation(compose.ui)
                 implementation(compose.foundation)
