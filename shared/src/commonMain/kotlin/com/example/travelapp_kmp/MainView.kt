@@ -1,51 +1,131 @@
+// shared/src/commonMain/kotlin/MainView.kt
 package com.example.travelapp_kmp
 
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.runtime.Composable
-import androidx.compose.runtime.remember
+import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
-import androidx.navigation.compose.NavHost
-import androidx.navigation.compose.composable
-import androidx.navigation.compose.rememberNavController
-import com.example.travelapp_kmp.details.DetailScreen
-import com.example.travelapp_kmp.details.DetailScreenWeb
-import com.example.travelapp_kmp.listing.ListScreenViewModel
-import com.example.travelapp_kmp.listing.MainScreen
-import com.example.travelapp_kmp.listing.TouristPlace
-
+import androidx.navigation.compose.*
+import com.example.travelapp_kmp.models.SessionResponse
+import com.example.travelapp_kmp.models.TokenResponse
+import com.example.travelapp_kmp.network.auth.SessionRepositoryImpl
+import com.example.travelapp_kmp.network.chat.ChatRepositoryImpl
+import com.example.travelapp_kmp.screens.*
+import com.example.travelapp_kmp.viewModels.*
 
 @Composable
-internal fun CommonView(isLargeScreen: Boolean = false) {
-    val viewMode = remember { ListScreenViewModel() }
-    val navController = rememberNavController()
-    var selectedTouristPlace: TouristPlace? = null
+fun CommonView() {
+    val nav = rememberNavController()
+
+    /* ------------------------------------------------------------ */
+    /*  Top-level app state                                          */
+    /* ------------------------------------------------------------ */
+    var token by remember { mutableStateOf<TokenResponse?>(null) }
+    var session by remember { mutableStateOf<SessionResponse?>(null) }
+
+    /* Decide which screen to start on */
+    val startDestination =
+        when {
+            token == null   -> "Register"
+            session == null -> "Session"
+            else            -> "Chat"
+        }
 
     MaterialTheme {
         NavHost(
-            navController = navController,
-            startDestination = AppScreen.List.name,
+            navController = nav,
+            startDestination = startDestination,
             modifier = Modifier.fillMaxSize()
         ) {
-            composable(AppScreen.List.name) {
-                MainScreen(navigateToDetails = {
-                    selectedTouristPlace = it
-                    navController.navigate(AppScreen.Details.name)
-                }, viewMode = viewMode)
+
+            /* ---------------- REGISTER ---------------- */
+            composable("Register") {
+                RegistrationScreen(
+                    vm = remember { RegistrationViewModel() },
+                    onRegistered = {
+                        nav.navigate("Login") {
+                            popUpTo("Register") { inclusive = true }
+                        }
+                    },
+                    onSwitchToLogin = { nav.navigate("Login") }
+                )
             }
-            composable(AppScreen.Details.name) {
-                if (isLargeScreen)
-                    DetailScreenWeb(touristPlace = selectedTouristPlace!!,
-                        navigateBack = { navController.popBackStack() })
-                else
-                    DetailScreen(touristPlace = selectedTouristPlace!!,
-                        navigateBack = { navController.popBackStack() })
+
+            /* ---------------- LOGIN ---------------- */
+            composable("Login") {
+                LoginScreen(
+                    onSuccess = { newToken ->
+                        token = newToken
+                        nav.navigate("Session") { popUpTo("Login") { inclusive = true } }
+                    },
+                    onSwitchToRegister = { nav.navigate("Register") }
+                )
+            }
+
+
+            /* ------------- SESSION (pick / create) ------------- */
+            composable("Session") {
+                val bearer = token?.accessToken
+                if (bearer == null) {                     // safety net
+                    nav.navigate("Login") { popUpTo("Session") { inclusive = true } }
+                    return@composable
+                }
+
+                val sessionVm = remember {
+                    SessionViewModel(token = bearer)
+                }
+
+                /** Option A – auto-create and jump straight to chat */
+                LaunchedEffect(Unit) {
+                    session = sessionVm.createAndUseNewSession()
+                    nav.navigate("Chat") {
+                        popUpTo("Session") { inclusive = true }
+                    }
+                }
+
+                /** Option B – let user choose/rename sessions */
+                /* SessionListScreen(
+                    vm = sessionVm,
+                    onPick = { chosen ->
+                        session = chosen
+                        nav.navigate("Chat") {
+                            popUpTo("Session") { inclusive = true }
+                        }
+                    }
+                 ) */
+            }
+
+            /* ---------------- CHAT -------------------- */
+            composable("Chat") {
+                val bearer = token?.accessToken
+                val chatSession = session
+
+                if (bearer == null || chatSession == null) {
+                    // Something is missing – fall back to login
+                    LaunchedEffect(Unit) {
+                        nav.navigate("Login") { popUpTo("Chat") { inclusive = true } }
+                    }
+                    return@composable
+                }
+
+                val chatVm = remember {
+                    ChatViewModel(
+                        repo = ChatRepositoryImpl(bearer),
+                        sessionRepo = SessionRepositoryImpl(bearer),
+                        initialSession = chatSession
+                    )
+                }
+
+                ChatScreen(
+                    vm = chatVm,
+                    onBack = {
+                        // user wants to sign out
+                        token = null
+                        session = null
+                        nav.navigate("Login") { popUpTo("Chat") { inclusive = true } }
+                    }
+                )
             }
         }
     }
 }
-
-enum class AppScreen {
-    List, Details
-}
-
