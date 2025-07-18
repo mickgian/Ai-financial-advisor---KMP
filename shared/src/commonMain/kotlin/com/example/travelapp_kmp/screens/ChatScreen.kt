@@ -5,104 +5,119 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
-import androidx.compose.material.icons.filled.Send
+import androidx.compose.material.icons.filled.ExitToApp
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
-import com.example.travelapp_kmp.models.ChatMessage
 import com.example.travelapp_kmp.models.ChatUiState
 import com.example.travelapp_kmp.viewModels.ChatViewModel
+import kotlinx.coroutines.launch
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun ChatScreen(
     vm: ChatViewModel,
-    onBack: () -> Unit
+    onBack: () -> Unit,
+    onLogout: () -> Unit
 ) {
-    val uiState by vm.state.collectAsState()
 
+    val uiState by vm.state.collectAsState()
     var input by remember { mutableStateOf("") }
+    val scope = rememberCoroutineScope()
 
     Scaffold(
         topBar = {
-            TopAppBar(
-                title = { Text("AI-Assistant") },
+            // in ChatScreen top bar
+            CenterAlignedTopAppBar(
                 navigationIcon = {
                     IconButton(onClick = onBack) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
+                        Icon(Icons.AutoMirrored.Filled.ArrowBack, null)
                     }
                 },
-                colors = TopAppBarDefaults.topAppBarColors(containerColor = MaterialTheme.colorScheme.primary)
+                title = { Text("Chat") },
+                actions = {
+                    IconButton(onClick = onLogout) {
+                        Icon(Icons.Default.ExitToApp, contentDescription = "Logout")
+                    }
+                }
             )
         },
         bottomBar = {
             Row(
                 Modifier
                     .fillMaxWidth()
-                    .padding(horizontal = 8.dp, vertical = 6.dp),
+                    .padding(8.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 OutlinedTextField(
                     value = input,
                     onValueChange = { input = it },
                     modifier = Modifier.weight(1f),
-                    placeholder = { Text("Type a message…") }
+                    placeholder = { Text("Message") }
                 )
+                Spacer(Modifier.width(8.dp))
                 IconButton(
                     enabled = input.isNotBlank(),
                     onClick = {
-                        vm.sendMessage(input.trim())
-                        input = ""
+                        scope.launch {
+                            vm.sendMessage(input.trim())
+                            input = ""
+                        }
                     }
                 ) {
-                    Icon(Icons.Default.Send, contentDescription = "Send")
+                    Text("Send", style = MaterialTheme.typography.labelLarge)
                 }
             }
         }
-    ) { innerPadding ->
+    ) { padding ->
+
         when (uiState) {
-            ChatUiState.Idle -> {}
-            ChatUiState.Loading -> LinearProgressIndicator(Modifier.fillMaxWidth())
-            is ChatUiState.Error -> {
-                Box(
-                    Modifier
-                        .fillMaxSize()
-                        .padding(innerPadding),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Text((uiState as ChatUiState.Error).message, color = MaterialTheme.colorScheme.error)
+            ChatUiState.Loading ->
+                Box(Modifier.fillMaxSize().padding(padding), Alignment.Center) {
+                    CircularProgressIndicator()
                 }
-            }
+
+            is ChatUiState.Error ->
+                Box(Modifier.fillMaxSize().padding(padding), Alignment.Center) {
+                    Text((uiState as ChatUiState.Error).message)
+                }
 
             is ChatUiState.History -> {
-                val msgs = (uiState as ChatUiState.History).messages
+                val history = (uiState as ChatUiState.History).messages
                 LazyColumn(
-                    Modifier
-                        .fillMaxSize()
-                        .padding(innerPadding),
-                    reverseLayout = true
+                    contentPadding = padding,
+                    modifier = Modifier.fillMaxSize()
                 ) {
-                    items(msgs.reversed()) { msg ->
-                        ChatBubble(msg)
+                    items(history) { msg ->
+                        Row(
+                            Modifier
+                                .fillMaxWidth()
+                                .padding(8.dp),
+                            horizontalArrangement =
+                                if (msg.fromUser) Arrangement.End else Arrangement.Start
+                        ) {
+                            Surface(
+                                shape = MaterialTheme.shapes.medium,
+                                color = if (msg.fromUser)
+                                    MaterialTheme.colorScheme.primaryContainer
+                                else
+                                    MaterialTheme.colorScheme.surfaceVariant
+                            ) {
+                                Text(
+                                    msg.text,
+                                    modifier = Modifier
+                                        .padding(12.dp)
+                                        .widthIn(max = 280.dp)
+                                )
+                            }
+                        }
                     }
                 }
             }
-        }
-    }
-}
 
-@Composable
-private fun ChatBubble(msg: ChatMessage) {
-    val bg = if (msg.fromUser) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surfaceVariant
-    val align = if (msg.fromUser) Alignment.End else Alignment.Start
-    Row(Modifier.fillMaxWidth(), horizontalArrangement = if (msg.fromUser) Arrangement.End else Arrangement.Start) {
-        Card(
-            colors = CardDefaults.cardColors(containerColor = bg),
-            modifier = Modifier.widthIn(max = 260.dp).padding(4.dp)
-        ) {
-            Text(msg.text, Modifier.padding(8.dp), color = if (msg.fromUser) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurfaceVariant)
+            ChatUiState.Idle -> { /* empty */ }
         }
     }
 }

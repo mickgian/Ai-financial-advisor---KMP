@@ -30,11 +30,3 @@ data class TokenResponse(
     val token: TokenResponse
 )
 
-// chat
-@Serializable data class ChatRequest(
-    val sessionId: String,
-    val message: String
-)
-@Serializable data class ChatResponse(
-    val text: String
-)

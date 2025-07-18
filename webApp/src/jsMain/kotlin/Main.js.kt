@@ -5,7 +5,7 @@ import org.jetbrains.skiko.wasm.onWasmReady
 @OptIn(ExperimentalComposeUiApi::class)
 fun main() {
     onWasmReady {
-        CanvasBasedWindow("Travel App") {
+        CanvasBasedWindow("Base AI") {
             MainViewWeb()
         }
     }

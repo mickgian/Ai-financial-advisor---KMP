@@ -1,4 +1,3 @@
-// shared/src/commonMain/kotlin/MainView.kt
 package com.example.travelapp_kmp
 
 import androidx.compose.foundation.layout.fillMaxSize
@@ -66,42 +65,37 @@ fun CommonView() {
             /* ------------- SESSION (pick / create) ------------- */
             composable("Session") {
                 val bearer = token?.accessToken
-                if (bearer == null) {                     // safety net
+                if (bearer == null) {
+                    // user is not logged-in → bounce to Login
                     nav.navigate("Login") { popUpTo("Session") { inclusive = true } }
                     return@composable
                 }
 
-                val sessionVm = remember {
-                    SessionViewModel(token = bearer)
-                }
+                val sessionVm = remember { SessionViewModel(token = bearer) }
 
-                /** Option A – auto-create and jump straight to chat */
-                LaunchedEffect(Unit) {
-                    session = sessionVm.createAndUseNewSession()
-                    nav.navigate("Chat") {
-                        popUpTo("Session") { inclusive = true }
-                    }
-                }
-
-                /** Option B – let user choose/rename sessions */
-                /* SessionListScreen(
+                SessionListScreen(
                     vm = sessionVm,
                     onPick = { chosen ->
                         session = chosen
-                        nav.navigate("Chat") {
+                        token   = chosen.token
+                        nav.navigate("Chat")
+                    },
+                    onLogout = {           // clear creds + bounce to login
+                        token   = null
+                        session = null
+                        nav.navigate("Login") {
                             popUpTo("Session") { inclusive = true }
                         }
                     }
-                 ) */
+                )
             }
 
             /* ---------------- CHAT -------------------- */
             composable("Chat") {
-                val bearer = token?.accessToken
-                val chatSession = session
+                val chatSession = session              // SessionResponse chosen in SessionListScreen
+                val bearer = chatSession?.token?.accessToken
 
                 if (bearer == null || chatSession == null) {
-                    // Something is missing – fall back to login
                     LaunchedEffect(Unit) {
                         nav.navigate("Login") { popUpTo("Chat") { inclusive = true } }
                     }
@@ -110,22 +104,27 @@ fun CommonView() {
 
                 val chatVm = remember {
                     ChatViewModel(
-                        repo = ChatRepositoryImpl(bearer),
-                        sessionRepo = SessionRepositoryImpl(bearer),
+                        repo = ChatRepositoryImpl(bearer),          // <-- session token
+                        sessionRepo = SessionRepositoryImpl(bearer),       // <-- session token
                         initialSession = chatSession
                     )
                 }
 
                 ChatScreen(
-                    vm = chatVm,
-                    onBack = {
-                        // user wants to sign out
-                        token = null
+                    vm      = chatVm,
+                    onBack  = {
+                        nav.popBackStack()
+                      },   // pop to SessionListScreen
+                    onLogout = {                        // clear creds + bounce to login
+                        token   = null
                         session = null
-                        nav.navigate("Login") { popUpTo("Chat") { inclusive = true } }
+                        nav.navigate("Login") {
+                            popUpTo("Chat") { inclusive = true }
+                        }
                     }
                 )
             }
+
         }
     }
 }
