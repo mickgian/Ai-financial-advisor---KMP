@@ -24,7 +24,12 @@ class SessionRepositoryImpl(
     private val client: HttpClient = HttpClientProvider.client
 ) : SessionRepository {
 
-    private val base = ApiConfig.BASE_URL + "/auth/session"
+    /* --- endpoints ------------------------------------------------------ */
+    // POST /auth/session   (create)
+    // GET  /auth/sessions  (list)
+    // PATCH|DELETE /auth/session/{id}/...
+    private val sessionBase = "${ApiConfig.BASE_URL}/auth/session"
+    private val sessionsUrl = "${ApiConfig.BASE_URL}/auth/sessions"
 
     /** Helper to add bearer to every call */
     private fun HttpRequestBuilder.auth() {
@@ -32,18 +37,18 @@ class SessionRepositoryImpl(
     }
 
     override suspend fun createSession(): SessionResponse =
-        client.post(base) {
+        client.post(sessionBase) {
             auth()
             contentType(ContentType.Application.Json)
         }.body()
 
     override suspend fun listSessions(): List<SessionResponse> =
-        client.get(base) {
+        client.get(sessionsUrl) {
             auth()
         }.body()
 
     override suspend fun renameSession(sessionId: String, newName: String): SessionResponse =
-        client.patch("$base/$sessionId/name") {
+        client.patch("$sessionBase/$sessionId/name") {
             auth()
             setBody(
                 FormDataContent(Parameters.build { append("name", newName) })
@@ -51,6 +56,6 @@ class SessionRepositoryImpl(
         }.body()
 
     override suspend fun deleteSession(sessionId: String) {
-        client.delete("$base/$sessionId") { auth() }
+        client.delete("$sessionBase/$sessionId") { auth() }
     }
 }

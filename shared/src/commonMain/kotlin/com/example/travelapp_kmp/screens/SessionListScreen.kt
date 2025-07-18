@@ -4,91 +4,97 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
-import androidx.compose.material3.Button
-import androidx.compose.material3.CircularProgressIndicator
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Surface
-import androidx.compose.material3.Text
-import androidx.compose.runtime.Composable
-import androidx.compose.runtime.collectAsState
-import androidx.compose.runtime.getValue
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.ExitToApp
+import androidx.compose.material3.*
+import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import com.example.travelapp_kmp.models.SessionResponse
 import com.example.travelapp_kmp.viewModels.SessionViewModel
+import kotlinx.coroutines.launch
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun SessionListScreen(
     vm: SessionViewModel,
-    onPick: (SessionResponse) -> Unit
+    onPick: (SessionResponse) -> Unit,
+    onLogout: () -> Unit,
 ) {
-    val state by vm.state.collectAsState()
+    val uiState by vm.state.collectAsState()
+    val scope   = rememberCoroutineScope()
 
-    Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-        when (state) {
-            SessionViewModel.State.Loading -> {
-                CircularProgressIndicator()
-            }
-            is SessionViewModel.State.Error -> {
-                Text(
-                    text = (state as SessionViewModel.State.Error).message,
-                    color = MaterialTheme.colorScheme.error
-                )
-            }
-            is SessionViewModel.State.Ready -> {
-                val sessions = (state as SessionViewModel.State.Ready).sessions
+    /* If there is NO session yet → transparently create one */
+    LaunchedEffect(uiState) {
+        if (uiState is SessionViewModel.State.Ready &&
+            (uiState as SessionViewModel.State.Ready).sessions.isEmpty()
+        ) {
+            val first = vm.createAndUseNewSession()
+            onPick(first)
+        }
+    }
 
-                if (sessions.isEmpty()) {
-                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                        Text("No sessions found")
-                        Spacer(Modifier.height(8.dp))
-                        Button(onClick = {
-                            // you might expose a create() on our VM instead
-                            // vm.createAndUseNewSession().also { onPick(it) }
-                        }) {
-                            Text("Create first session")
-                        }
+    Scaffold(
+        topBar = {
+            CenterAlignedTopAppBar(
+                title   = { Text("Your chats") },
+                actions = {
+                    IconButton(onClick = onLogout) {
+                        Icon(Icons.Default.ExitToApp, contentDescription = "Logout")
                     }
-                } else {
-                    LazyColumn(
-                        modifier = Modifier.fillMaxSize(),
-                        contentPadding = PaddingValues(16.dp),
-                        verticalArrangement = Arrangement.spacedBy(12.dp)
-                    ) {
-                        items(sessions, key = { it.sessionId }) { session ->
-                            Surface(
-                                tonalElevation = 2.dp,
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .clickable { onPick(session) }
-                            ) {
-                                Row(
-                                    modifier = Modifier
-                                        .fillMaxWidth()
-                                        .padding(16.dp),
-                                    horizontalArrangement = Arrangement.SpaceBetween,
-                                    verticalAlignment = Alignment.CenterVertically
-                                ) {
-                                    Column {
-                                        Text(
-                                            text = session.name.ifBlank { "Session ${session.sessionId}" },
-                                            style = MaterialTheme.typography.titleMedium
-                                        )
-                                        Text(
-                                            text = "ID: ${session.sessionId}",
-                                            style = MaterialTheme.typography.bodySmall
-                                        )
-                                    }
-                                    Button(onClick = { onPick(session) }) {
-                                        Text("Use")
-                                    }
+                }
+            )
+        },
+        floatingActionButton = {
+            FloatingActionButton(onClick = {
+                scope.launch {
+                    val newSession = vm.createAndUseNewSession()
+                    /*  guarantee state-first, navigation-second  */
+                    onPick(newSession)
+                }
+            }) {
+                Icon(Icons.Default.Add, contentDescription = "New chat")
+            }
+        }
+    ) { pad ->
+
+        when (uiState) {
+            SessionViewModel.State.Loading ->
+                Box(Modifier.fillMaxSize().padding(pad), Alignment.Center) {
+                    CircularProgressIndicator()
+                }
+
+            is SessionViewModel.State.Error ->
+                Box(Modifier.fillMaxSize().padding(pad), Alignment.Center) {
+                    Text((uiState as SessionViewModel.State.Error).message)
+                }
+
+            is SessionViewModel.State.Ready -> {
+                val sessions = (uiState as SessionViewModel.State.Ready).sessions
+                LazyColumn(
+                    Modifier
+                        .fillMaxSize()
+                        .padding(pad)
+                ) {
+                    items(sessions, key = { it.sessionId }) { s ->
+                        ListItem(
+                            headlineContent   = { Text(s.name.ifBlank { "Untitled chat" }) },
+                            supportingContent = { Text("id: ${s.sessionId}") },
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clickable {
+                                    /* same guarantee as FAB above                        */
+                                    scope.launch { onPick(s) }
                                 }
-                            }
-                        }
+                                .padding(horizontal = 8.dp, vertical = 4.dp)
+                        )
+                        Divider()
                     }
                 }
             }
         }
     }
 }
+
