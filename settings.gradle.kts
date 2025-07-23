@@ -33,9 +33,8 @@ dependencyResolutionManagement {
     }
 }
 
-rootProject.name = "TaxAI"
+rootProject.name = "Base"
 
-include(":desktopApp")
 include(":webApp")
 include(":shared")
 include(":androidApp")

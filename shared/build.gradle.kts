@@ -18,9 +18,14 @@ plugins {
 version = "1.0"
 
 kotlin {
-    androidTarget()
+    androidTarget {
+        compilations.all {
+            kotlinOptions {
+                jvmTarget = "21"
+            }
+        }
+    }
 
-    jvm("desktop")
     iosX64()
     iosArm64()
     iosSimulatorArm64()
@@ -33,24 +38,9 @@ kotlin {
         browser()
     }
 
-    macosX64 {
-        binaries {
-            executable {
-                entryPoint = "main"
-            }
-        }
-    }
-    macosArm64 {
-        binaries {
-            executable {
-                entryPoint = "main"
-            }
-        }
-    }
-
     cocoapods {
         summary = "Shared code for the sample"
-        homepage = "https://github.com/SEAbdulbasit/TravelApp-KMP"
+        homepage = ""
         ios.deploymentTarget = "14.1"
         podfile = project.file("../iosApp/Podfile")
         framework {
@@ -110,13 +100,6 @@ kotlin {
             }
         }
 
-        val desktopMain by getting {
-            dependencies {
-                implementation(compose.desktop.common)
-                implementation(libs.ktor.client.java)
-                implementation(libs.kotlinx.coroutines.swing)
-            }
-        }
 
         jsMain {
             dependencies {
@@ -129,7 +112,7 @@ kotlin {
 
 android {
     compileSdk = 34
-    namespace = "com.example.travelapp_kmp"
+    namespace = "com.base.shared"
     sourceSets["main"].manifest.srcFile("src/androidMain/AndroidManifest.xml")
     defaultConfig {
         minSdk = 24
@@ -145,7 +128,7 @@ android {
 
 @Suppress("TooGenericExceptionCaught")
 configure<BuildKonfigExtension> {
-    packageName = "com.example.travelapp_kmp"
+    packageName = "com.base.shared"
     val properties = Properties()
 
     val rootProjectDir = project.rootProject.rootDir
