@@ -1,96 +1,118 @@
-# TravelApp-KMP (Compose Multiplatform)
+# BaseApp-KMP (Kotlin Multiplatform)
 
-This is an exploration app for Compose Multiplatform UI. Currently this app have Android, iOS, Web and Desktop part and it is 100% Compose UI. For more details on Compose Multiplatform UI visit: https://github.com/JetBrains/compose-jb/
-The support for iOS on Compose Multiplatform is still in experimental phase.
+A Kotlin Multiplatform application with authentication and chat capabilities built using Compose Multiplatform UI. This project demonstrates a complete authentication system with JWT token management and secure storage across multiple platforms.
 
-This is just a demonstration, the code is still not in perfect form.
+## Features
 
-For rest api, I am using [Makoon](https://mockoon.com/)
+- **Authentication System**: Complete user registration and login with JWT tokens
+- **Secure Token Storage**: Platform-specific encrypted storage (Android Keystore, iOS Keychain)
+- **Chat Interface**: Real-time chat functionality with session management
+- **Comprehensive Logging**: Multi-platform logging system with security-aware token logging
+- **Modern UI**: Built with Compose Multiplatform for consistent UI across platforms
 
-Current supported Platforms are:
-1. Android
-2. iOS
-3. Web
-4. Desktop
+## Architecture
 
-## Live 
-You can view it live [here](https://seabdulbasit.github.io/TravelApp-KMP/)
+The project follows a clean architecture pattern with:
 
-## Running the App:
-For running the app, you need an api to feed data. For Rest api, I am using [Makoon](https://mockoon.com/). You can create a local enviroment and add countrieslist api. Here you can find the sample response here: https://github.com/SEAbdulbasit/TravelApp-KMP/blob/master/TravelApp-KMM.json 
+- **Shared Module** (`com.base.shared`): Contains all business logic, networking, and data management
+- **Platform-Specific Modules**: Android, iOS, web, and WASM implementations
+- **Dependency Injection**: Centralized AuthModule for proper component wiring
+- **MVVM Pattern**: ViewModels for state management with StateFlow
 
-## iOS
+## Project Structure
 
-<table>
-<tr>
-<td>
+```
+shared/src/
+├── commonMain/kotlin/com/base/shared/
+│   ├── auth/           # Authentication management
+│   ├── models/         # Data models and DTOs
+│   ├── network/        # HTTP client and repositories
+│   ├── screens/        # Compose UI screens
+│   ├── storage/        # Token storage interfaces
+│   ├── utils/          # Utilities and logging
+│   └── viewModels/     # MVVM ViewModels
+├── androidMain/        # Android-specific implementations
+├── iosMain/           # iOS-specific implementations
+├── jsMain/            # Web-specific implementations
+└── wasmJsMain/        # WASM-specific implementations
+```
 
-![Simulator Screen Shot - iPhone 14 - 2023-02-14 at 10 33 24](https://user-images.githubusercontent.com/33172684/218648261-1ee20808-5944-4cfb-bb44-e03600680bbe.png)
+## Current Supported Platforms
 
+1. **Android** (`com.base.android`)
+2. **iOS** (BaseApp-KMP)
+3. **Web** (JavaScript)
+4. **WASM** (WebAssembly)
 
-</td>
-<td>
+## Key Components
 
-![Simulator Screen Shot - iPhone 14 - 2023-02-14 at 10 33 49](https://user-images.githubusercontent.com/33172684/218648312-54ac11ba-cc1b-4099-931f-1072d26854a4.png)
+### Authentication System
+- **AuthManager**: Handles token lifecycle and validation
+- **AuthRepository**: Network operations for login/registration
+- **TokenStorage**: Secure, platform-specific token persistence
+- **AuthModule**: Dependency injection for authentication components
 
+### Security Features
+- JWT token management with automatic refresh
+- Encrypted storage using platform-specific secure storage
+- Security-aware logging (only first 8 characters of tokens logged)
+- HTTP client with configurable logging levels
 
-</td>
-<td>
+### Networking
+- Ktor HTTP client with timeout configuration
+- JSON serialization with Kotlinx.serialization
+- Centralized HTTP client provider
+- Configurable logging (INFO level for security)
 
-![Simulator Screen Shot - iPhone 14 - 2023-02-14 at 10 34 11](https://user-images.githubusercontent.com/33172684/218648353-041a7b0d-7532-47c9-8faa-f1cb993b970b.png)
+## Getting Started
 
-</td>
-</tr>
-</table>
+### Prerequisites
+- Android Studio or IntelliJ IDEA
+- Xcode (for iOS development)
+- Backend API server running on `http://10.0.2.2:8000` (Android emulator) or `http://localhost:8000`
 
+### Running the Application
 
-## Android
+1. **Android**: Run the `androidApp` configuration
+2. **iOS**: Open `iosApp.xcodeproj` in Xcode and run
+3. **Web**: Run the `jsApp` configuration
+4. **WASM**: Run the `wasmJsApp` configuration
 
+### Backend Requirements
 
-https://user-images.githubusercontent.com/33172684/218650285-2872c54e-e6cf-4888-8199-ab60f109e27a.mp4
+The application expects a REST API with the following endpoints:
+- `POST /api/v1/auth/register` - User registration
+- `POST /api/v1/auth/login` - User authentication
+- `GET /api/v1/auth/sessions` - Session management
+- `POST /api/v1/chat/completions` - Chat functionality
 
+## Configuration
 
-## Desktop
+### API Configuration
+Update `ApiConfig.kt` files for each platform to configure the backend URL:
+- Development: `http://10.0.2.2:8000` (Android)
+- Production: Configure appropriate production URLs
 
-![image](https://user-images.githubusercontent.com/33172684/220402597-fc7f3c28-fc2d-45a8-87d1-cbc73a7cccec.png)
+### Logging
+The application includes comprehensive logging with:
+- Platform-specific implementations
+- Authentication operation tracking
+- Secure token logging (first 8 characters only)
+- Configurable log levels
 
+## Development Notes
 
-## Web
-
-![Screenshot 2024-04-04 at 10 44 34 AM](https://github.com/SEAbdulbasit/TravelApp-KMP/assets/33172684/3898e6fb-35a1-459e-b4e3-513811e19aab)
-
-
-## How to contribute?
-To add a new country, follow this [guide](https://github.com/SEAbdulbasit/TravelApp-KMP/wiki/How-to-add-a-new-Country)
-
-## Added countries list
-Following is the list of countries that are added to the app:
-1. Egypt
-2. Japan
-3. France
-4. Bangladesh
-5. India
-6. Pakistan
-7. Algeria
-8. Germany
-9. United Kingdom
-10. Switzerland
-11. Costa Rica
-12. Alyemen
-13. Lithuania
-14. Indonesia
-15. Iraq
-16. Kenya
-17. Vietnam
-18. Peru
-19. Saudi Arabia
-20. United States
+- The project uses expect/actual pattern for platform-specific implementations
+- All authentication state is managed through StateFlow for reactive UI updates
+- Token storage is encrypted on all platforms for security
+- HTTP logging is set to INFO level to prevent token exposure in logs
 
 ## License
+
 ```
 MIT License
 
-Copyright (c) 2024 Abdul Basit
+Copyright (c) 2024 Michele Giannone
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
 of this software and associated documentation files (the "Software"), to deal
