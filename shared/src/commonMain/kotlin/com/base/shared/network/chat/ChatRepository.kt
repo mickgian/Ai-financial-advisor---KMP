@@ -2,10 +2,12 @@ package com.base.shared.network.chat
 
 import com.base.shared.ApiConfig
 import com.base.shared.network.HttpClientProvider
+import com.base.shared.utils.NetworkLogger
 import io.ktor.client.*
-import io.ktor.client.call.*
 import io.ktor.client.request.*
+import io.ktor.client.statement.*
 import io.ktor.http.*
+import kotlinx.serialization.json.Json
 
 interface ChatRepository {
     /**
@@ -30,21 +32,50 @@ class ChatRepositoryImpl(
 
     /** POST /api/v1/chatbot/chat  */
     override suspend fun sendMessage(sessionId: String, userText: String): String {
-        // ① build the JSON body expected by the FastAPI endpoint
         val requestBody = ChatCompletionRequestDto(
             messages = listOf(ChatRoleMessageDto(role = "user", content = userText))
         )
 
-        // ② perform the HTTP call — the session is identified by the *JWT*
-        val resp: ChatCompletionResponseDto = client.post(url) {
-            header(HttpHeaders.Authorization, "Bearer $jwt")
-            contentType(ContentType.Application.Json)
-            setBody(requestBody)
-        }.body()
+        // Log the request details
+        NetworkLogger.logRequest(
+            method = "POST",
+            url = url,
+            headers = mapOf("Authorization" to "Bearer ${jwt.take(10)}..."), 
+            body = Json.encodeToString(ChatCompletionRequestDto.serializer(), requestBody),
+            tag = "ChatRepo"
+        )
 
-        // ③ extract the assistant’s first reply (fallback if none)
-        return resp.messages.firstOrNull { it.role == "assistant" }?.content
-            ?: "(no reply)"
+        try {
+            val httpResponse: HttpResponse = client.post(url) {
+                header(HttpHeaders.Authorization, "Bearer $jwt")
+                contentType(ContentType.Application.Json)
+                setBody(requestBody)
+            }
+
+            // Get response body once
+            val responseBody = httpResponse.bodyAsText()
+            
+            // Log successful response
+            NetworkLogger.logResponse(
+                method = "POST",
+                url = url,
+                statusCode = httpResponse.status.value,
+                body = responseBody,
+                tag = "ChatRepo"
+            )
+
+            // Parse the response
+            val resp: ChatCompletionResponseDto = Json.decodeFromString(ChatCompletionResponseDto.serializer(), responseBody)
+            return resp.messages.firstOrNull { it.role == "assistant" }?.content ?: "(no reply)"
+        } catch (e: Exception) {
+            NetworkLogger.logError(
+                method = "POST",
+                url = url,
+                error = e.message ?: "Unknown error",
+                tag = "ChatRepo"
+            )
+            throw e
+        }
     }
 }
 

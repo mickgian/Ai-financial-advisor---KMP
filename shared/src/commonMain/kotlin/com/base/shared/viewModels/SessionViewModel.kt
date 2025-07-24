@@ -45,4 +45,15 @@ class SessionViewModel(
         reload()           // update UI
         return s
     }
+    
+    /** Rename a session and update the UI */
+    suspend fun renameSession(sessionId: String, newName: String) {
+        runCatching { 
+            repo.renameSession(sessionId, newName)
+        }.onSuccess {
+            reload() // refresh the session list to show updated name
+        }.onFailure { error ->
+            _state.value = State.Error("Failed to rename session: ${error.message}")
+        }
+    }
 }

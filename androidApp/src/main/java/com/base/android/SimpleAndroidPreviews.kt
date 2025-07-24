@@ -1,13 +1,17 @@
 package com.base.android
 
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.ExitToApp
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.automirrored.filled.Send
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -51,24 +55,53 @@ fun ChatScreenEmptyPreview() {
                 )
             },
             bottomBar = {
-                Row(
-                    Modifier
-                        .fillMaxWidth()
-                        .padding(8.dp),
-                    verticalAlignment = Alignment.CenterVertically
+                Surface(
+                    color = MaterialTheme.colorScheme.surface,
+                    shadowElevation = 8.dp
                 ) {
-                    OutlinedTextField(
-                        value = "",
-                        onValueChange = { },
-                        modifier = Modifier.weight(1f),
-                        placeholder = { Text("Message") }
-                    )
-                    Spacer(Modifier.width(8.dp))
-                    IconButton(
-                        enabled = false,
-                        onClick = { }
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 16.dp, vertical = 12.dp),
+                        verticalAlignment = Alignment.Bottom
                     ) {
-                        Text("Send", style = MaterialTheme.typography.labelLarge)
+                        OutlinedTextField(
+                            value = "",
+                            onValueChange = { },
+                            modifier = Modifier.weight(1f),
+                            placeholder = { 
+                                Text(
+                                    "Message",
+                                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
+                                ) 
+                            },
+                            shape = RoundedCornerShape(24.dp),
+                            colors = OutlinedTextFieldDefaults.colors(
+                                unfocusedBorderColor = MaterialTheme.colorScheme.outline.copy(alpha = 0.3f),
+                                focusedBorderColor = MaterialTheme.colorScheme.primary
+                            ),
+                            maxLines = 4
+                        )
+                        
+                        Spacer(modifier = Modifier.width(8.dp))
+                        
+                        IconButton(
+                            onClick = { },
+                            enabled = false,
+                            modifier = Modifier
+                                .size(48.dp)
+                                .background(
+                                    color = MaterialTheme.colorScheme.outline.copy(alpha = 0.3f),
+                                    shape = CircleShape
+                                )
+                        ) {
+                            Icon(
+                                imageVector = Icons.AutoMirrored.Filled.Send,
+                                contentDescription = "Send message",
+                                tint = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f),
+                                modifier = Modifier.size(20.dp)
+                            )
+                        }
                     }
                 }
             }
@@ -116,53 +149,133 @@ fun ChatScreenWithMessagesPreview() {
                 )
             },
             bottomBar = {
-                Row(
-                    Modifier
-                        .fillMaxWidth()
-                        .padding(8.dp),
-                    verticalAlignment = Alignment.CenterVertically
+                Surface(
+                    color = MaterialTheme.colorScheme.surface,
+                    shadowElevation = 8.dp
                 ) {
-                    OutlinedTextField(
-                        value = "Sample message",
-                        onValueChange = { },
-                        modifier = Modifier.weight(1f),
-                        placeholder = { Text("Message") }
-                    )
-                    Spacer(Modifier.width(8.dp))
-                    IconButton(
-                        enabled = true,
-                        onClick = { }
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 16.dp, vertical = 12.dp),
+                        verticalAlignment = Alignment.Bottom
                     ) {
-                        Text("Send", style = MaterialTheme.typography.labelLarge)
+                        OutlinedTextField(
+                            value = "Sample message",
+                            onValueChange = { },
+                            modifier = Modifier.weight(1f),
+                            placeholder = { 
+                                Text(
+                                    "Message",
+                                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
+                                ) 
+                            },
+                            shape = RoundedCornerShape(24.dp),
+                            colors = OutlinedTextFieldDefaults.colors(
+                                unfocusedBorderColor = MaterialTheme.colorScheme.outline.copy(alpha = 0.3f),
+                                focusedBorderColor = MaterialTheme.colorScheme.primary
+                            ),
+                            maxLines = 4
+                        )
+                        
+                        Spacer(modifier = Modifier.width(8.dp))
+                        
+                        IconButton(
+                            onClick = { },
+                            enabled = true,
+                            modifier = Modifier
+                                .size(48.dp)
+                                .background(
+                                    color = MaterialTheme.colorScheme.primary,
+                                    shape = CircleShape
+                                )
+                        ) {
+                            Icon(
+                                imageVector = Icons.AutoMirrored.Filled.Send,
+                                contentDescription = "Send message",
+                                tint = MaterialTheme.colorScheme.onPrimary,
+                                modifier = Modifier.size(20.dp)
+                            )
+                        }
                     }
                 }
             }
         ) { padding ->
             LazyColumn(
-                contentPadding = padding,
+                contentPadding = PaddingValues(
+                    top = padding.calculateTopPadding(),
+                    bottom = padding.calculateBottomPadding() + 8.dp,
+                    start = 16.dp,
+                    end = 16.dp
+                ),
+                verticalArrangement = Arrangement.spacedBy(12.dp),
                 modifier = Modifier.fillMaxSize()
             ) {
                 items(sampleMessages) { msg ->
-                    Row(
-                        Modifier
-                            .fillMaxWidth()
-                            .padding(8.dp),
-                        horizontalArrangement =
-                            if (msg.fromUser) Arrangement.End else Arrangement.Start
-                    ) {
-                        Surface(
-                            shape = MaterialTheme.shapes.medium,
-                            color = if (msg.fromUser)
-                                MaterialTheme.colorScheme.primaryContainer
-                            else
-                                MaterialTheme.colorScheme.surfaceVariant
+                    if (msg.fromUser) {
+                        // User message - aligned to the right with blue background
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.End
                         ) {
-                            Text(
-                                msg.text,
+                            Box(
                                 modifier = Modifier
-                                    .padding(12.dp)
+                                    .background(
+                                        color = MaterialTheme.colorScheme.primary,
+                                        shape = RoundedCornerShape(18.dp)
+                                    )
+                                    .padding(horizontal = 16.dp, vertical = 10.dp)
                                     .widthIn(max = 280.dp)
-                            )
+                            ) {
+                                Text(
+                                    text = msg.text,
+                                    color = MaterialTheme.colorScheme.onPrimary,
+                                    style = MaterialTheme.typography.bodyLarge
+                                )
+                            }
+                        }
+                    } else {
+                        // AI message - aligned to the left with avatar and gray background
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.Start,
+                            verticalAlignment = Alignment.Top
+                        ) {
+                            // AI Avatar
+                            Box(
+                                modifier = Modifier
+                                    .size(32.dp)
+                                    .background(
+                                        color = MaterialTheme.colorScheme.secondaryContainer,
+                                        shape = CircleShape
+                                    ),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Text(
+                                    text = "AI",
+                                    color = MaterialTheme.colorScheme.onSecondaryContainer,
+                                    style = MaterialTheme.typography.labelSmall,
+                                    fontWeight = androidx.compose.ui.text.font.FontWeight.Bold
+                                )
+                            }
+                            
+                            Spacer(modifier = Modifier.width(12.dp))
+                            
+                            // Message bubble
+                            Box(
+                                modifier = Modifier
+                                    .background(
+                                        color = MaterialTheme.colorScheme.surfaceVariant,
+                                        shape = RoundedCornerShape(18.dp)
+                                    )
+                                    .padding(horizontal = 16.dp, vertical = 10.dp)
+                                    .widthIn(max = 280.dp)
+                            ) {
+                                Text(
+                                    text = msg.text,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    style = MaterialTheme.typography.bodyLarge
+                                )
+                            }
                         }
                     }
                 }

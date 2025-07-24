@@ -34,16 +34,52 @@ class ChatViewModel(
         buffer += ChatMessage(text = userText, fromUser = true)
         _state.value = ChatUiState.History(buffer.toList())
 
+        // If this is the first message, generate a title from it
+        val isFirstMessage = buffer.size == 1
+        
         // remote call
         _state.value = ChatUiState.Loading
         runCatching { repo.sendMessage(sessionId, userText) }
             .onSuccess { assistantText ->
                 buffer += ChatMessage(text = assistantText, fromUser = false)
                 _state.value = ChatUiState.History(buffer.toList())
+                
+                // Auto-rename session based on first user message
+                if (isFirstMessage) {
+                    val title = generateTitleFromMessage(userText)
+                    runCatching { 
+                        sessionRepo.renameSession(sessionId, title)
+                    }
+                }
             }
             .onFailure { e ->
                 _state.value = ChatUiState.Error(e.message ?: "Send failed")
             }
+    }
+    
+    private fun generateTitleFromMessage(message: String): String {
+        // Smart title extraction: extract key meaningful words
+        val cleanMessage = message.trim()
+        
+        // Remove common question words from the beginning
+        val questionWords = listOf("how", "what", "where", "when", "why", "who", "can", "could", "would", "should", "is", "are", "do", "does")
+        val words = cleanMessage.split("\\s+".toRegex())
+        
+        // Find the first meaningful part after question words
+        val meaningfulStart = words.indexOfFirst { word ->
+            !questionWords.contains(word.lowercase()) && word.length > 2
+        }.let { if (it == -1) 0 else maxOf(0, it - 1) }
+        
+        val relevantWords = words.drop(meaningfulStart)
+        
+        // Build title with key words
+        val title = relevantWords.take(8).joinToString(" ")
+        
+        return if (title.length <= 50) {
+            title.replaceFirstChar { it.uppercaseChar() }
+        } else {
+            title.take(47) + "..."
+        }
     }
 
     /** Optional helper: start an **empty** brand-new session */
