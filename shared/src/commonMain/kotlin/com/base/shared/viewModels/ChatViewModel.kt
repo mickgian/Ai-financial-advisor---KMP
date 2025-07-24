@@ -14,7 +14,8 @@ import kotlinx.coroutines.launch
 class ChatViewModel(
     private val repo: ChatRepository,          // ↖ talk to /chatbot/chat
     private val sessionRepo: SessionRepository, // ↖ should you need CRUD ops
-    private val initialSession: SessionResponse // ↖ gives us sessionId & token
+    private val initialSession: SessionResponse, // ↖ gives us sessionId & token
+    private val onSessionUpdated: (() -> Unit)? = null // ↖ callback to refresh session list
 ) : ViewModel() {
 
     private val _state = MutableStateFlow<ChatUiState>(
@@ -27,6 +28,28 @@ class ChatViewModel(
 
     /** Always valid: taken from `initialSession` or a freshly-created one */
     private var sessionId: String = initialSession.sessionId
+    
+    init {
+        // Load existing chat history for this session
+        loadChatHistory()
+    }
+    
+    /** Load existing chat history from the backend */
+    private fun loadChatHistory() = viewModelScope.launch {
+        _state.value = ChatUiState.Loading
+        runCatching { 
+            repo.loadChatHistory(sessionId) 
+        }.onSuccess { messages ->
+            buffer.clear()
+            buffer.addAll(messages)
+            _state.value = ChatUiState.History(buffer.toList())
+        }.onFailure { e ->
+            // If loading fails, start with empty history (graceful degradation)
+            buffer.clear()
+            _state.value = ChatUiState.History(emptyList())
+            println("KMP_LOG: [ChatViewModel] Failed to load chat history: ${e.message}")
+        }
+    }
 
     /** Send a user message → optimistic UI → backend → assistant reply   */
     fun sendMessage(userText: String) = viewModelScope.launch {
@@ -49,6 +72,9 @@ class ChatViewModel(
                     val title = generateTitleFromMessage(userText)
                     runCatching { 
                         sessionRepo.renameSession(sessionId, title)
+                    }.onSuccess {
+                        // Notify that session was updated so the UI can refresh
+                        onSessionUpdated?.invoke()
                     }
                 }
             }

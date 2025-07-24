@@ -146,10 +146,11 @@ fun ChatScreen(
                     }
                 }
                 
-                // Auto-scroll to bottom when new messages arrive
+                // Auto-scroll to bottom when new messages arrive - more gentle scrolling
                 LaunchedEffect(history.size) {
                     if (history.isNotEmpty()) {
-                        listState.animateScrollToItem(history.size - 1)
+                        // Use scrollToItem to avoid aggressive animation that can push content too far
+                        listState.scrollToItem(history.size - 1)
                     }
                 }
             }
@@ -426,27 +427,16 @@ fun ChatScreenWithHistory(
             ChatViewModel(
                 repo = ChatRepositoryImpl(session.token.accessToken),
                 sessionRepo = SessionRepositoryImpl(token), // Keep user token for session management
-                initialSession = session
+                initialSession = session,
+                onSessionUpdated = { sessionVm.reload() } // Refresh session list when session is updated
             )
         }
     }
     
     val chatState by (chatVm?.state?.collectAsState() ?: mutableStateOf(ChatUiState.Idle))
     
-    // Auto-create first session if none exist
-    LaunchedEffect(sessionState) {
-        if (sessionState is SessionViewModel.State.Ready) {
-            val sessions = (sessionState as SessionViewModel.State.Ready).sessions
-            if (sessions.isEmpty()) {
-                // Create first session and set as active
-                val newSession = sessionVm.createAndUseNewSession()
-                activeSession = newSession
-            } else if (activeSession == null) {
-                // Set the first session as active if none selected
-                activeSession = sessions.first()
-            }
-        }
-    }
+    // Don't create session immediately - wait for first message (prevents empty sessions)
+    // User can select existing sessions from sidebar or start typing to create new one
     
     // Input state
     var input by remember { mutableStateOf("") }
@@ -455,9 +445,12 @@ fun ChatScreenWithHistory(
     // Drawer state for mobile
     val drawerState = rememberDrawerState(DrawerValue.Closed)
     
-    // Check if we have any sessions with messages to show sidebar
+    // Check if we have multiple sessions, named sessions, or current chat has history to show sidebar
     val hasSessions = sessionState is SessionViewModel.State.Ready && 
-                     (sessionState as SessionViewModel.State.Ready).sessions.any { it.name.isNotBlank() }
+                     ((sessionState as SessionViewModel.State.Ready).sessions.run {
+                         size > 1 || any { it.name.isNotBlank() }
+                     } || chatState is ChatUiState.History) // Show sidebar if we have chat history loaded (even if empty)
+    
     
     if (hasSessions) {
         // Show with sidebar when multiple sessions exist
@@ -467,6 +460,7 @@ fun ChatScreenWithHistory(
                 ChatHistorySidebar(
                     sessionState = sessionState,
                     activeSession = activeSession,
+                    chatState = chatState,
                     onSessionSelect = { session ->
                         activeSession = session
                         scope.launch { drawerState.close() }
@@ -490,6 +484,11 @@ fun ChatScreenWithHistory(
                 onInputChange = { input = it },
                 onSendMessage = {
                     scope.launch {
+                        // Create session on-demand if none exists (prevents empty sessions)
+                        if (activeSession == null) {
+                            val newSession = sessionVm.createAndUseNewSession()
+                            activeSession = newSession
+                        }
                         chatVm?.sendMessage(input.trim())
                         input = ""
                     }
@@ -508,6 +507,11 @@ fun ChatScreenWithHistory(
             onInputChange = { input = it },
             onSendMessage = {
                 scope.launch {
+                    // Create session on-demand if none exists (prevents empty sessions)
+                    if (activeSession == null) {
+                        val newSession = sessionVm.createAndUseNewSession()
+                        activeSession = newSession
+                    }
                     chatVm?.sendMessage(input.trim())
                     input = ""
                 }
@@ -523,12 +527,16 @@ fun ChatScreenWithHistory(
 private fun ChatHistorySidebar(
     sessionState: SessionViewModel.State,
     activeSession: SessionResponse?,
+    chatState: ChatUiState,
     onSessionSelect: (SessionResponse) -> Unit,
     onNewChat: () -> Unit,
     onLogout: () -> Unit,
     sessionVm: SessionViewModel
 ) {
     val scope = rememberCoroutineScope()
+    
+    // Track which sessions have been checked for messages and their message counts
+    var sessionMessageCounts by remember { mutableStateOf(mapOf<String, Int>()) }
     ModalDrawerSheet(
         modifier = Modifier.width(280.dp)
     ) {
@@ -579,16 +587,36 @@ private fun ChatHistorySidebar(
             // Sessions List
             when (sessionState) {
                 is SessionViewModel.State.Ready -> {
-                    // Filter out empty sessions (sessions with no messages)
-                    // A session is considered "empty" if it has no name (blank name means no messages sent)
-                    val sessionsWithMessages = sessionState.sessions.filter { session ->
-                        session.name.isNotBlank()
+                    // Load message counts for sessions to filter out empty ones
+                    LaunchedEffect(sessionState.sessions) {
+                        sessionState.sessions.forEach { session ->
+                            if (!sessionMessageCounts.containsKey(session.sessionId)) {
+                                // Load message count for this session
+                                try {
+                                    val chatRepo = ChatRepositoryImpl(session.token.accessToken)
+                                    val messages = chatRepo.loadChatHistory(session.sessionId)
+                                    sessionMessageCounts = sessionMessageCounts + (session.sessionId to messages.size)
+                                    println("KMP_LOG: [DEBUG] Session ${session.sessionId.take(8)} has ${messages.size} messages")
+                                } catch (e: Exception) {
+                                    println("KMP_LOG: [DEBUG] Failed to load messages for session ${session.sessionId.take(8)}: ${e.message}")
+                                    // Mark as 0 messages if failed to load
+                                    sessionMessageCounts = sessionMessageCounts + (session.sessionId to 0)
+                                }
+                            }
+                        }
+                    }
+                    
+                    // Filter sessions to only show those with messages (ignore custom names if no messages)
+                    val sessionsWithContent = sessionState.sessions.filter { session ->
+                        val messageCount = sessionMessageCounts[session.sessionId] ?: -1 // -1 means not loaded yet
+                        messageCount > 0 // Only show sessions that actually have messages
                     }
                     
                     LazyColumn(
                         modifier = Modifier.weight(1f)
                     ) {
-                        items(sessionsWithMessages, key = { it.sessionId }) { session ->
+                        items(sessionsWithContent, key = { it.sessionId }) { session ->
+                            val messageCount = sessionMessageCounts[session.sessionId] ?: -1
                             SessionListItem(
                                 session = session,
                                 isActive = session.sessionId == activeSession?.sessionId,
@@ -596,8 +624,10 @@ private fun ChatHistorySidebar(
                                 onRenameSession = { newName ->
                                     scope.launch {
                                         sessionVm.renameSession(session.sessionId, newName)
+                                        // Don't automatically select the renamed session
                                     }
-                                }
+                                },
+                                messageCount = messageCount
                             )
                         }
                     }
@@ -668,7 +698,7 @@ private fun ChatContent(
                 input = input,
                 onInputChange = onInputChange,
                 onSendMessage = onSendMessage,
-                enabled = input.isNotBlank() && activeSession != null
+                enabled = input.isNotBlank() // Session will be created on-demand
             )
         }
     ) { padding ->
@@ -724,10 +754,11 @@ private fun ChatContent(
                     }
                 }
                 
-                // Auto-scroll to bottom when new messages arrive
+                // Auto-scroll to bottom when new messages arrive - more gentle scrolling
                 LaunchedEffect(history.size) {
                     if (history.isNotEmpty()) {
-                        listState.animateScrollToItem(history.size - 1)
+                        // Use scrollToItem to avoid aggressive animation that can push content too far
+                        listState.scrollToItem(history.size - 1)
                     }
                 }
             }
@@ -755,6 +786,7 @@ private fun SessionListItem(
     isActive: Boolean,
     onSessionSelect: () -> Unit,
     onRenameSession: (String) -> Unit,
+    messageCount: Int = -1, // -1 means not loaded yet
     modifier: Modifier = Modifier
 ) {
     var isEditing by remember { mutableStateOf(false) }
@@ -837,27 +869,25 @@ private fun SessionListItem(
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Text(
-                        text = session.name.ifBlank { "New Chat" },
+                        text = session.name.ifBlank { "Chat" },
                         maxLines = 2,
                         modifier = Modifier.weight(1f)
                     )
                     
-                    // Edit button (only show when not active to avoid clutter)
-                    if (!isActive) {
-                        IconButton(
-                            onClick = {
-                                editText = session.name
-                                isEditing = true
-                            },
-                            modifier = Modifier.size(24.dp)
-                        ) {
-                            Icon(
-                                Icons.Default.Edit,
-                                contentDescription = "Edit title",
-                                modifier = Modifier.size(16.dp),
-                                tint = MaterialTheme.colorScheme.outline
-                            )
-                        }
+                    // Edit button (always show for all sessions)
+                    IconButton(
+                        onClick = {
+                            editText = session.name
+                            isEditing = true
+                        },
+                        modifier = Modifier.size(24.dp)
+                    ) {
+                        Icon(
+                            Icons.Default.Edit,
+                            contentDescription = "Edit title",
+                            modifier = Modifier.size(16.dp),
+                            tint = MaterialTheme.colorScheme.outline
+                        )
                     }
                 }
             }
