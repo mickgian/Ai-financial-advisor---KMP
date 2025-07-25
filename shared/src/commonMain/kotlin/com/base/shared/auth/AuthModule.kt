@@ -4,6 +4,10 @@ import com.base.shared.network.auth.AuthRepository
 import com.base.shared.network.auth.AuthRepositoryImpl
 import com.base.shared.storage.TokenStorage
 import com.base.shared.utils.Logger
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.launch
 
 /**
  * Authentication module that provides properly configured auth components
@@ -13,6 +17,9 @@ object AuthModule {
     
     private var _authManager: AuthManager? = null
     private var _authRepository: AuthRepository? = null
+    
+    // Create a coroutine scope for the module
+    private val moduleScope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
     
     /**
      * Initialize the authentication system with platform context.
@@ -37,6 +44,17 @@ object AuthModule {
             // Store instances
             _authManager = authManager
             _authRepository = authRepository
+            
+            // Initialize the AuthManager to load existing tokens
+            Logger.authDebug("MODULE_INIT_AUTH_MANAGER", "Initializing AuthManager...")
+            moduleScope.launch {
+                try {
+                    authManager.initialize()
+                    Logger.authInfo("MODULE_INIT_AUTH_MANAGER_SUCCESS", "AuthManager initialized successfully")
+                } catch (e: Exception) {
+                    Logger.authError("MODULE_INIT_AUTH_MANAGER_FAILED", "Failed to initialize AuthManager", e)
+                }
+            }
             
             Logger.authInfo("MODULE_INIT_SUCCESS", "Authentication module initialized successfully")
         } catch (e: Exception) {
