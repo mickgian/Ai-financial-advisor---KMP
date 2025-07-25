@@ -54,4 +54,17 @@ dependencies {
     implementation("androidx.core:core-ktx:1.12.0")
     implementation("androidx.activity:activity-compose:1.8.2")
     implementation(libs.androidx.core.ktx)
+    
+    // Compose BOM for version alignment
+    implementation(platform("androidx.compose:compose-bom:2023.10.01"))
+    
+    // Core Compose dependencies
+    implementation("androidx.compose.ui:ui")
+    implementation("androidx.compose.ui:ui-graphics")
+    implementation("androidx.compose.ui:ui-tooling-preview")
+    implementation("androidx.compose.material3:material3")
+    
+    // Compose UI tooling for previews (debug only)
+    debugImplementation("androidx.compose.ui:ui-tooling")
+    debugImplementation("androidx.compose.ui:ui-test-manifest")
 }
