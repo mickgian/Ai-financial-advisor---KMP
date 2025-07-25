@@ -47,9 +47,11 @@ class SessionViewModel(
     }
     
     /** Rename a session and update the UI */
-    suspend fun renameSession(sessionId: String, newName: String) {
+    suspend fun renameSession(sessionId: String, newName: String, sessionToken: String) {
         runCatching { 
-            repo.renameSession(sessionId, newName)
+            // Create a session repository with the session-specific token for this operation
+            val sessionSpecificRepo = SessionRepositoryImpl(sessionToken)
+            sessionSpecificRepo.renameSession(sessionId, newName)
         }.onSuccess {
             reload() // refresh the session list to show updated name
         }.onFailure { error ->

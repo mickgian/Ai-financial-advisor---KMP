@@ -8,7 +8,11 @@ import io.ktor.client.*
 import io.ktor.client.call.*
 import io.ktor.client.request.*
 import io.ktor.client.request.forms.*
+import io.ktor.client.statement.*
 import io.ktor.http.*
+import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.jsonObject
+import kotlinx.serialization.json.jsonPrimitive
 
 interface SessionRepository {
     suspend fun createSession(): SessionResponse
@@ -112,11 +116,27 @@ class SessionRepositoryImpl(
                 )
             }
             
-            val sessionResponse: SessionResponse = response.body()
-            NetworkLogger.logResponse("PATCH", url, response.status.value, 
-                "Renamed session ${sessionId.take(8)}... to '$newName'", "SessionRepo")
+            // Debug: Log the raw response body first
+            val rawBody = response.bodyAsText()
+            println("KMP_LOG: [DEBUG] Raw rename response (status ${response.status.value}): $rawBody")
             
-            sessionResponse
+            // Check if response was successful
+            if (response.status.value in 200..299) {
+                // Parse the raw JSON manually to create SessionResponse
+                val sessionResponse = Json.decodeFromString<SessionResponse>(rawBody)
+                NetworkLogger.logResponse("PATCH", url, response.status.value, 
+                    "Renamed session ${sessionId.take(8)}... to '$newName'", "SessionRepo")
+                sessionResponse
+            } else {
+                // Handle error response
+                val errorMessage = try {
+                    val errorJson = Json.parseToJsonElement(rawBody)
+                    errorJson.jsonObject["detail"]?.jsonPrimitive?.content ?: "Unknown error"
+                } catch (e: Exception) {
+                    "Failed to parse error response: $rawBody"
+                }
+                throw Exception("API Error ${response.status.value}: $errorMessage")
+            }
         } catch (e: Exception) {
             NetworkLogger.logError("PATCH", url, e.message ?: "Unknown error", "SessionRepo")
             throw e

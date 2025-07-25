@@ -71,10 +71,15 @@ class ChatViewModel(
                 if (isFirstMessage) {
                     val title = generateTitleFromMessage(userText)
                     runCatching { 
-                        sessionRepo.renameSession(sessionId, title)
+                        // Create session-specific repository for rename operation
+                        val sessionSpecificRepo = com.base.shared.network.auth.SessionRepositoryImpl(initialSession.token.accessToken)
+                        sessionSpecificRepo.renameSession(sessionId, title)
                     }.onSuccess {
                         // Notify that session was updated so the UI can refresh
                         onSessionUpdated?.invoke()
+                    }.onFailure { error ->
+                        println("KMP_LOG: [DEBUG] Auto-rename failed: ${error.message}")
+                        // Don't fail the whole chat operation if rename fails
                     }
                 }
             }

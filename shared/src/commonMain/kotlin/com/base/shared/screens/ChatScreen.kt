@@ -62,6 +62,10 @@ import androidx.compose.ui.input.key.key
 import androidx.compose.ui.input.key.onKeyEvent
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.compose.foundation.text.KeyboardActions
+import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.ui.platform.LocalSoftwareKeyboardController
+import androidx.compose.ui.text.input.ImeAction
 import com.base.shared.models.ChatMessage
 import com.base.shared.models.ChatUiState
 import com.base.shared.models.SessionResponse
@@ -355,6 +359,8 @@ fun ChatInputBar(
     enabled: Boolean,
     modifier: Modifier = Modifier
 ) {
+    val keyboardController = LocalSoftwareKeyboardController.current
+    
     Surface(
         modifier = modifier,
         color = MaterialTheme.colorScheme.surface,
@@ -381,7 +387,18 @@ fun ChatInputBar(
                     unfocusedBorderColor = MaterialTheme.colorScheme.outline.copy(alpha = 0.3f),
                     focusedBorderColor = MaterialTheme.colorScheme.primary
                 ),
-                maxLines = 4
+                maxLines = 4,
+                keyboardOptions = KeyboardOptions.Default.copy(
+                    imeAction = ImeAction.Send
+                ),
+                keyboardActions = KeyboardActions(
+                    onSend = {
+                        if (enabled) {
+                            onSendMessage()
+                            keyboardController?.hide()
+                        }
+                    }
+                )
             )
             
             Spacer(modifier = Modifier.width(8.dp))
@@ -623,8 +640,10 @@ private fun ChatHistorySidebar(
                                 onSessionSelect = { onSessionSelect(session) },
                                 onRenameSession = { newName ->
                                     scope.launch {
-                                        sessionVm.renameSession(session.sessionId, newName)
-                                        // Don't automatically select the renamed session
+                                        println("KMP_LOG: [DEBUG] Renaming session ${session.sessionId.take(8)} to '$newName'")
+                                        sessionVm.renameSession(session.sessionId, newName, session.token.accessToken)
+                                        println("KMP_LOG: [DEBUG] Rename completed, sidebar should stay open")
+                                        // Don't automatically select the renamed session or close the drawer
                                     }
                                 },
                                 messageCount = messageCount
