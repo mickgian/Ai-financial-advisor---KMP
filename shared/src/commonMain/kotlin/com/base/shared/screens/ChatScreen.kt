@@ -75,6 +75,21 @@ import com.base.shared.viewModels.ChatViewModel
 import com.base.shared.viewModels.SessionViewModel
 import kotlinx.coroutines.launch
 
+// Utility function to decode HTML entities
+private fun decodeHtmlEntities(text: String): String {
+    return text
+        .replace("&amp;#x27;", "'")
+        .replace("&#x27;", "'")
+        .replace("&amp;quot;", "\"")
+        .replace("&quot;", "\"")
+        .replace("&amp;lt;", "<")
+        .replace("&lt;", "<")
+        .replace("&amp;gt;", ">")
+        .replace("&gt;", ">")
+        .replace("&amp;amp;", "&")
+        .replace("&amp;", "&")
+}
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun ChatScreen(
@@ -809,7 +824,10 @@ private fun SessionListItem(
     modifier: Modifier = Modifier
 ) {
     var isEditing by remember { mutableStateOf(false) }
-    var editText by remember { mutableStateOf(session.name) }
+    var editText by remember { mutableStateOf(decodeHtmlEntities(session.name)) }
+    
+    // Decode HTML entities in session name for display
+    val displayName = decodeHtmlEntities(session.name)
     
     ListItem(
         headlineContent = {
@@ -868,7 +886,7 @@ private fun SessionListItem(
                     // Cancel button
                     IconButton(
                         onClick = {
-                            editText = session.name
+                            editText = decodeHtmlEntities(session.name)
                             isEditing = false
                         },
                         modifier = Modifier.size(24.dp)
@@ -888,7 +906,7 @@ private fun SessionListItem(
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Text(
-                        text = session.name.ifBlank { "Chat" },
+                        text = displayName.ifBlank { "Chat" },
                         maxLines = 2,
                         modifier = Modifier.weight(1f)
                     )
@@ -896,7 +914,7 @@ private fun SessionListItem(
                     // Edit button (always show for all sessions)
                     IconButton(
                         onClick = {
-                            editText = session.name
+                            editText = decodeHtmlEntities(session.name)
                             isEditing = true
                         },
                         modifier = Modifier.size(24.dp)

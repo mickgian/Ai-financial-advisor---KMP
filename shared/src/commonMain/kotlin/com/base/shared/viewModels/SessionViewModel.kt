@@ -48,13 +48,30 @@ class SessionViewModel(
     
     /** Rename a session and update the UI */
     suspend fun renameSession(sessionId: String, newName: String, sessionToken: String) {
+        // Optimistic update - update UI immediately to prevent flicker
+        val currentState = _state.value
+        if (currentState is State.Ready) {
+            val updatedSessions = currentState.sessions.map { session ->
+                if (session.sessionId == sessionId) {
+                    session.copy(name = newName)
+                } else {
+                    session
+                }
+            }
+            _state.value = State.Ready(updatedSessions)
+        }
+        
+        // Then perform the actual API call
         runCatching { 
             // Create a session repository with the session-specific token for this operation
             val sessionSpecificRepo = SessionRepositoryImpl(sessionToken)
             sessionSpecificRepo.renameSession(sessionId, newName)
         }.onSuccess {
-            reload() // refresh the session list to show updated name
+            // Success - the UI is already updated, no need to reload
+            println("KMP_LOG: [DEBUG] Session renamed successfully, UI already updated")
         }.onFailure { error ->
+            // Revert the optimistic update and show error
+            reload() // restore original state
             _state.value = State.Error("Failed to rename session: ${error.message}")
         }
     }

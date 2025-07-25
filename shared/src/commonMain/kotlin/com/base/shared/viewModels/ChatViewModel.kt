@@ -19,7 +19,7 @@ class ChatViewModel(
 ) : ViewModel() {
 
     private val _state = MutableStateFlow<ChatUiState>(
-        ChatUiState.History(emptyList())
+        ChatUiState.Idle
     )
     val state: StateFlow<ChatUiState> = _state
 
@@ -42,11 +42,16 @@ class ChatViewModel(
         }.onSuccess { messages ->
             buffer.clear()
             buffer.addAll(messages)
-            _state.value = ChatUiState.History(buffer.toList())
+            // Show "Start a conversation" text if no messages, otherwise show history
+            _state.value = if (messages.isEmpty()) {
+                ChatUiState.Idle
+            } else {
+                ChatUiState.History(buffer.toList())
+            }
         }.onFailure { e ->
-            // If loading fails, start with empty history (graceful degradation)
+            // If loading fails, start with Idle state to show "Start a conversation"
             buffer.clear()
-            _state.value = ChatUiState.History(emptyList())
+            _state.value = ChatUiState.Idle
             println("KMP_LOG: [ChatViewModel] Failed to load chat history: ${e.message}")
         }
     }
@@ -119,6 +124,6 @@ class ChatViewModel(
         val new = sessionRepo.createSession()
         sessionId = new.sessionId
         buffer.clear()
-        _state.value = ChatUiState.History(emptyList())
+        _state.value = ChatUiState.Idle
     }
 }
