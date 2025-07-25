@@ -23,3 +23,6 @@ shared/shared.podspec
 /webApp/build/
 /secret.properties
 /.kotlin
+
+# Claude Code memory files - keep local only
+CLAUDE.md
