@@ -40,7 +40,10 @@ kotlin {
 
     cocoapods {
         summary = "Shared code for the sample"
-        homepage = ""
+        homepage = "https://github.com/example/base-kmp-ai-agent"
+        version = "1.0"
+        authors = "Development Team"
+        license = "MIT"
         ios.deploymentTarget = "14.1"
         podfile = project.file("../iosApp/Podfile")
         framework {

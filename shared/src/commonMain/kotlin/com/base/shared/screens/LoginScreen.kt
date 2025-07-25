@@ -11,6 +11,7 @@ import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.text.input.ImeAction
+import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
 import com.base.shared.models.TokenResponse
@@ -28,7 +29,17 @@ fun LoginScreen(
     var pass by remember { mutableStateOf("") }
     
     val passwordFocusRequester = remember { FocusRequester() }
+    val emailFocusRequester = remember { FocusRequester() }
     val keyboardController = LocalSoftwareKeyboardController.current
+    
+    // iOS workaround: Request focus on email field when screen loads
+    LaunchedEffect(Unit) {
+        try {
+            emailFocusRequester.requestFocus()
+        } catch (e: Exception) {
+            // Ignore focus errors on some platforms
+        }
+    }
 
     Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
 
@@ -36,15 +47,21 @@ fun LoginScreen(
             LoginViewModel.LoginState.Idle,
             is LoginViewModel.LoginState.Error -> {
 
-                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                Column(
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    modifier = Modifier.padding(horizontal = 32.dp)
+                ) {
 
                     /* --- fields --- */
                     OutlinedTextField(
                         value = user,
                         onValueChange = { user = it },
                         label = { Text("Email") },
+                        placeholder = { Text("Enter your email") },
+                        modifier = Modifier.focusRequester(emailFocusRequester),
                         keyboardOptions = KeyboardOptions.Default.copy(
-                            imeAction = ImeAction.Next
+                            imeAction = ImeAction.Next,
+                            keyboardType = KeyboardType.Email
                         ),
                         keyboardActions = KeyboardActions(
                             onNext = { passwordFocusRequester.requestFocus() }
@@ -56,10 +73,12 @@ fun LoginScreen(
                         value = pass,
                         onValueChange = { pass = it },
                         label = { Text("Password") },
+                        placeholder = { Text("Enter your password") },
                         visualTransformation = PasswordVisualTransformation(),
                         modifier = Modifier.focusRequester(passwordFocusRequester),
                         keyboardOptions = KeyboardOptions.Default.copy(
-                            imeAction = ImeAction.Done
+                            imeAction = ImeAction.Done,
+                            keyboardType = KeyboardType.Password
                         ),
                         keyboardActions = KeyboardActions(
                             onDone = {

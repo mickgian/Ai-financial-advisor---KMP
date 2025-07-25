@@ -8,6 +8,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -20,6 +21,8 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.KeyboardActions
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.ExitToApp
@@ -60,12 +63,10 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.input.key.Key
 import androidx.compose.ui.input.key.key
 import androidx.compose.ui.input.key.onKeyEvent
-import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.unit.dp
-import androidx.compose.foundation.text.KeyboardActions
-import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
+import androidx.compose.ui.unit.dp
 import com.base.shared.models.ChatMessage
 import com.base.shared.models.ChatUiState
 import com.base.shared.models.SessionResponse
@@ -453,6 +454,19 @@ fun ChatScreenWithHistory(
     // Current active session state
     var activeSession by remember { mutableStateOf<SessionResponse?>(null) }
     
+    // Update activeSession when sessions are renamed
+    LaunchedEffect(sessionState, activeSession?.sessionId) {
+        val currentState = sessionState
+        val currentActiveSession = activeSession
+        if (currentState is SessionViewModel.State.Ready && currentActiveSession != null) {
+            // Find the updated session data for the current active session
+            val updatedSession = currentState.sessions.find { it.sessionId == currentActiveSession.sessionId }
+            if (updatedSession != null && updatedSession != currentActiveSession) {
+                activeSession = updatedSession
+            }
+        }
+    }
+    
     // Chat state for active session
     val chatVm = remember(activeSession) {
         activeSession?.let { session ->
@@ -517,11 +531,25 @@ fun ChatScreenWithHistory(
                 onSendMessage = {
                     scope.launch {
                         // Create session on-demand if none exists (prevents empty sessions)
-                        if (activeSession == null) {
+                        val currentSession = if (activeSession == null) {
                             val newSession = sessionVm.createAndUseNewSession()
                             activeSession = newSession
+                            newSession
+                        } else {
+                            activeSession
                         }
-                        chatVm?.sendMessage(input.trim())
+                        
+                        // Create ChatViewModel directly if needed to avoid race condition
+                        val currentChatVm = chatVm ?: currentSession?.let { session ->
+                            ChatViewModel(
+                                repo = ChatRepositoryImpl(session.token.accessToken),
+                                sessionRepo = SessionRepositoryImpl(token),
+                                initialSession = session,
+                                onSessionUpdated = { sessionVm.reload() }
+                            )
+                        }
+                        
+                        currentChatVm?.sendMessage(input.trim())
                         input = ""
                     }
                 },
@@ -734,7 +762,8 @@ private fun ChatContent(
                 onSendMessage = onSendMessage,
                 enabled = input.isNotBlank() // Session will be created on-demand
             )
-        }
+        },
+        contentWindowInsets = WindowInsets(0.dp)
     ) { padding ->
         when (chatState) {
             ChatUiState.Loading ->
