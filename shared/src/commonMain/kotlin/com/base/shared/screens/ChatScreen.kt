@@ -9,6 +9,7 @@ import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -16,6 +17,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
+import androidx.compose.foundation.layout.wrapContentWidth
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
@@ -72,6 +74,9 @@ import com.base.shared.models.ChatUiState
 import com.base.shared.models.SessionResponse
 import com.base.shared.network.auth.SessionRepositoryImpl
 import com.base.shared.network.chat.ChatRepositoryImpl
+import com.base.shared.utils.getPlatform
+import com.base.shared.utils.PlatformType
+import com.base.shared.utils.ResponsiveUtils
 import com.base.shared.viewModels.ChatViewModel
 import com.base.shared.viewModels.SessionViewModel
 import kotlinx.coroutines.launch
@@ -481,15 +486,13 @@ fun ChatScreenWithHistory(
     
     val chatState by (chatVm?.state?.collectAsState() ?: mutableStateOf(ChatUiState.Idle))
     
-    // Don't create session immediately - wait for first message (prevents empty sessions)
-    // User can select existing sessions from sidebar or start typing to create new one
-    
     // Input state
     var input by remember { mutableStateOf("") }
     val scope = rememberCoroutineScope()
     
-    // Drawer state for mobile
-    val drawerState = rememberDrawerState(DrawerValue.Closed)
+    // Platform and responsive behavior
+    val platform = getPlatform()
+    var sidebarCollapsed by remember { mutableStateOf(false) }
     
     // Check if we have multiple sessions, named sessions, or current chat has history to show sidebar
     val hasSessions = sessionState is SessionViewModel.State.Ready && 
@@ -497,66 +500,118 @@ fun ChatScreenWithHistory(
                          size > 1 || any { it.name.isNotBlank() }
                      } || chatState is ChatUiState.History) // Show sidebar if we have chat history loaded (even if empty)
     
-    
     if (hasSessions) {
-        // Show with sidebar when multiple sessions exist
-        ModalNavigationDrawer(
-            drawerState = drawerState,
-            drawerContent = {
-                ChatHistorySidebar(
+        when (platform) {
+            PlatformType.WEB -> {
+                // Web: Use persistent sidebar with collapse functionality
+                ResponsiveWebChatLayout(
                     sessionState = sessionState,
                     activeSession = activeSession,
                     chatState = chatState,
-                    onSessionSelect = { session ->
-                        activeSession = session
-                        scope.launch { drawerState.close() }
-                    },
+                    input = input,
+                    sidebarCollapsed = sidebarCollapsed,
+                    onInputChange = { input = it },
+                    onSessionSelect = { session -> activeSession = session },
                     onNewChat = {
                         scope.launch {
                             val newSession = sessionVm.createAndUseNewSession()
                             activeSession = newSession
-                            drawerState.close()
                         }
                     },
+                    onSendMessage = {
+                        scope.launch {
+                            // Create session on-demand if none exists (prevents empty sessions)
+                            val currentSession = if (activeSession == null) {
+                                val newSession = sessionVm.createAndUseNewSession()
+                                activeSession = newSession
+                                newSession
+                            } else {
+                                activeSession
+                            }
+                            
+                            // Create ChatViewModel directly if needed to avoid race condition
+                            val currentChatVm = chatVm ?: currentSession?.let { session ->
+                                ChatViewModel(
+                                    repo = ChatRepositoryImpl(session.token.accessToken),
+                                    sessionRepo = SessionRepositoryImpl(token),
+                                    initialSession = session,
+                                    onSessionUpdated = { sessionVm.reload() }
+                                )
+                            }
+                            
+                            currentChatVm?.sendMessage(input.trim())
+                            input = ""
+                        }
+                    },
+                    onToggleSidebar = { sidebarCollapsed = !sidebarCollapsed },
                     onLogout = onLogout,
                     sessionVm = sessionVm
                 )
             }
-        ) {
-            ChatContent(
-                chatState = chatState,
-                activeSession = activeSession,
-                input = input,
-                onInputChange = { input = it },
-                onSendMessage = {
-                    scope.launch {
-                        // Create session on-demand if none exists (prevents empty sessions)
-                        val currentSession = if (activeSession == null) {
-                            val newSession = sessionVm.createAndUseNewSession()
-                            activeSession = newSession
-                            newSession
-                        } else {
-                            activeSession
-                        }
-                        
-                        // Create ChatViewModel directly if needed to avoid race condition
-                        val currentChatVm = chatVm ?: currentSession?.let { session ->
-                            ChatViewModel(
-                                repo = ChatRepositoryImpl(session.token.accessToken),
-                                sessionRepo = SessionRepositoryImpl(token),
-                                initialSession = session,
-                                onSessionUpdated = { sessionVm.reload() }
-                            )
-                        }
-                        
-                        currentChatVm?.sendMessage(input.trim())
-                        input = ""
+            
+            else -> {
+                // Mobile/Desktop: Use drawer-based layout
+                val drawerState = rememberDrawerState(DrawerValue.Closed)
+                
+                ModalNavigationDrawer(
+                    drawerState = drawerState,
+                    drawerContent = {
+                        ChatHistorySidebar(
+                            sessionState = sessionState,
+                            activeSession = activeSession,
+                            chatState = chatState,
+                            onSessionSelect = { session ->
+                                activeSession = session
+                                scope.launch { drawerState.close() }
+                            },
+                            onNewChat = {
+                                scope.launch {
+                                    val newSession = sessionVm.createAndUseNewSession()
+                                    activeSession = newSession
+                                    drawerState.close()
+                                }
+                            },
+                            onLogout = onLogout,
+                            sessionVm = sessionVm
+                        )
                     }
-                },
-                onMenuClick = { scope.launch { drawerState.open() } },
-                onLogout = onLogout,
-                showMenuButton = true
-            )
+                ) {
+                    ChatContent(
+                        chatState = chatState,
+                        activeSession = activeSession,
+                        input = input,
+                        onInputChange = { input = it },
+                        onSendMessage = {
+                            scope.launch {
+                                // Create session on-demand if none exists (prevents empty sessions)
+                                val currentSession = if (activeSession == null) {
+                                    val newSession = sessionVm.createAndUseNewSession()
+                                    activeSession = newSession
+                                    newSession
+                                } else {
+                                    activeSession
+                                }
+                                
+                                // Create ChatViewModel directly if needed to avoid race condition
+                                val currentChatVm = chatVm ?: currentSession?.let { session ->
+                                    ChatViewModel(
+                                        repo = ChatRepositoryImpl(session.token.accessToken),
+                                        sessionRepo = SessionRepositoryImpl(token),
+                                        initialSession = session,
+                                        onSessionUpdated = { sessionVm.reload() }
+                                    )
+                                }
+                                
+                                currentChatVm?.sendMessage(input.trim())
+                                input = ""
+                            }
+                        },
+                        onMenuClick = { scope.launch { drawerState.open() } },
+                        onLogout = onLogout,
+                        showMenuButton = true
+                    )
+                }
+            }
         }
     } else {
         // Show without sidebar when no sessions or only one session
@@ -972,4 +1027,387 @@ private fun SessionListItem(
                 } else Modifier
             )
     )
+}
+
+// Responsive Web Chat Layout with Persistent Sidebar
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun ResponsiveWebChatLayout(
+    sessionState: SessionViewModel.State,
+    activeSession: SessionResponse?,
+    chatState: ChatUiState,
+    input: String,
+    sidebarCollapsed: Boolean,
+    onInputChange: (String) -> Unit,
+    onSessionSelect: (SessionResponse) -> Unit,
+    onNewChat: () -> Unit,
+    onSendMessage: () -> Unit,
+    onToggleSidebar: () -> Unit,
+    onLogout: () -> Unit,
+    sessionVm: SessionViewModel
+) {
+    val scope = rememberCoroutineScope()
+    
+    // Track which sessions have been checked for messages and their message counts
+    var sessionMessageCounts by remember { mutableStateOf(mapOf<String, Int>()) }
+    
+    Row(modifier = Modifier.fillMaxSize()) {
+        // Persistent Sidebar
+        if (!sidebarCollapsed) {
+            Surface(
+                modifier = Modifier.width(280.dp),
+                color = MaterialTheme.colorScheme.surfaceVariant,
+                shadowElevation = 4.dp
+            ) {
+                Column(
+                    modifier = Modifier.fillMaxSize()
+                ) {
+                    // Header with collapse button
+                    Surface(
+                        color = MaterialTheme.colorScheme.primaryContainer,
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(12.dp),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Text(
+                                "Chat History",
+                                style = MaterialTheme.typography.titleMedium,
+                                color = MaterialTheme.colorScheme.onPrimaryContainer
+                            )
+                            Row {
+                                // Collapse sidebar button
+                                IconButton(onClick = onToggleSidebar) {
+                                    Icon(
+                                        Icons.AutoMirrored.Filled.ArrowBack,
+                                        contentDescription = "Hide sidebar",
+                                        tint = MaterialTheme.colorScheme.onPrimaryContainer
+                                    )
+                                }
+                                IconButton(onClick = onLogout) {
+                                    Icon(
+                                        Icons.AutoMirrored.Filled.ExitToApp,
+                                        contentDescription = "Logout",
+                                        tint = MaterialTheme.colorScheme.onPrimaryContainer
+                                    )
+                                }
+                            }
+                        }
+                    }
+                    
+                    // New Chat Button
+                    OutlinedButton(
+                        onClick = onNewChat,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(16.dp)
+                    ) {
+                        Icon(Icons.Default.Add, contentDescription = null)
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text("New Chat")
+                    }
+                    
+                    HorizontalDivider()
+                    
+                    // Sessions List
+                    when (sessionState) {
+                        is SessionViewModel.State.Ready -> {
+                            // Load message counts for sessions to filter out empty ones
+                            LaunchedEffect(sessionState.sessions) {
+                                sessionState.sessions.forEach { session ->
+                                    if (!sessionMessageCounts.containsKey(session.sessionId)) {
+                                        // Load message count for this session
+                                        try {
+                                            val chatRepo = ChatRepositoryImpl(session.token.accessToken)
+                                            val messages = chatRepo.loadChatHistory(session.sessionId)
+                                            sessionMessageCounts = sessionMessageCounts + (session.sessionId to messages.size)
+                                        } catch (e: Exception) {
+                                            // Mark as 0 messages if failed to load
+                                            sessionMessageCounts = sessionMessageCounts + (session.sessionId to 0)
+                                        }
+                                    }
+                                }
+                            }
+                            
+                            // Filter sessions to only show those with messages
+                            val sessionsWithContent = sessionState.sessions.filter { session ->
+                                val messageCount = sessionMessageCounts[session.sessionId] ?: -1
+                                messageCount > 0
+                            }
+                            
+                            LazyColumn(
+                                modifier = Modifier.weight(1f)
+                            ) {
+                                items(sessionsWithContent, key = { it.sessionId }) { session ->
+                                    val messageCount = sessionMessageCounts[session.sessionId] ?: -1
+                                    SessionListItem(
+                                        session = session,
+                                        isActive = session.sessionId == activeSession?.sessionId,
+                                        onSessionSelect = { onSessionSelect(session) },
+                                        onRenameSession = { newName ->
+                                            scope.launch {
+                                                sessionVm.renameSession(session.sessionId, newName, session.token.accessToken)
+                                            }
+                                        },
+                                        messageCount = messageCount
+                                    )
+                                }
+                            }
+                        }
+                        SessionViewModel.State.Loading -> {
+                            Box(
+                                modifier = Modifier.weight(1f),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                CircularProgressIndicator()
+                            }
+                        }
+                        is SessionViewModel.State.Error -> {
+                            Box(
+                                modifier = Modifier.weight(1f),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Text(
+                                    sessionState.message,
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    color = MaterialTheme.colorScheme.error
+                                )
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        
+        // Main Chat Area
+        Column(
+            modifier = Modifier.weight(1f)
+        ) {
+            // Top bar with show sidebar button when collapsed
+            Surface(
+                color = MaterialTheme.colorScheme.surface,
+                shadowElevation = 4.dp
+            ) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(12.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    if (sidebarCollapsed) {
+                        IconButton(onClick = onToggleSidebar) {
+                            Icon(
+                                Icons.Default.Menu,
+                                contentDescription = "Show sidebar"
+                            )
+                        }
+                    }
+                    
+                    Text(
+                        text = activeSession?.name?.ifBlank { "New Chat" } ?: "Chat",
+                        style = MaterialTheme.typography.titleLarge,
+                        modifier = Modifier.weight(1f)
+                    )
+                    
+                    if (sidebarCollapsed) {
+                        IconButton(onClick = onLogout) {
+                            Icon(
+                                Icons.AutoMirrored.Filled.ExitToApp,
+                                contentDescription = "Logout"
+                            )
+                        }
+                    }
+                }
+            }
+            
+            // Chat Content
+            Box(
+                modifier = Modifier
+                    .weight(1f)
+                    .fillMaxWidth()
+            ) {
+                when (chatState) {
+                    ChatUiState.Loading ->
+                        Box(
+                            Modifier.fillMaxSize(),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                                CircularProgressIndicator()
+                                Spacer(modifier = Modifier.height(8.dp))
+                                Text("Loading chat...")
+                            }
+                        }
+                    
+                    is ChatUiState.Error ->
+                        Box(
+                            Modifier.fillMaxSize(),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                                Text(
+                                    chatState.message,
+                                    color = MaterialTheme.colorScheme.error,
+                                    style = MaterialTheme.typography.bodyLarge
+                                )
+                                Spacer(modifier = Modifier.height(8.dp))
+                                Text(
+                                    "Please check your connection and try again.",
+                                    style = MaterialTheme.typography.bodyMedium
+                                )
+                            }
+                        }
+                    
+                    is ChatUiState.History -> {
+                        val history = chatState.messages
+                        val listState = rememberLazyListState()
+                        
+                        // Centered content area for better readability on wide screens
+                        Row(
+                            modifier = Modifier.fillMaxSize(),
+                            horizontalArrangement = Arrangement.Center
+                        ) {
+                            LazyColumn(
+                                state = listState,
+                                contentPadding = PaddingValues(
+                                    top = 16.dp,
+                                    bottom = 16.dp,
+                                    start = 16.dp,
+                                    end = 16.dp
+                                ),
+                                verticalArrangement = Arrangement.spacedBy(12.dp),
+                                modifier = Modifier
+                                    .widthIn(max = 800.dp) // Max width for readability
+                                    .fillMaxHeight()
+                            ) {
+                                items(history) { msg ->
+                                    WebChatMessageBubble(message = msg)
+                                }
+                            }
+                        }
+                        
+                        // Auto-scroll to bottom when new messages arrive
+                        LaunchedEffect(history.size) {
+                            if (history.isNotEmpty()) {
+                                listState.scrollToItem(history.size - 1)
+                            }
+                        }
+                    }
+                    
+                    ChatUiState.Idle -> {
+                        Box(
+                            Modifier.fillMaxSize(),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Text(
+                                "Start a conversation",
+                                style = MaterialTheme.typography.bodyLarge,
+                                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
+                            )
+                        }
+                    }
+                }
+            }
+            
+            // Input Bar
+            Surface(
+                color = MaterialTheme.colorScheme.surface,
+                shadowElevation = 8.dp
+            ) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.Center
+                ) {
+                    ChatInputBar(
+                        input = input,
+                        onInputChange = onInputChange,
+                        onSendMessage = onSendMessage,
+                        enabled = input.isNotBlank(),
+                        modifier = Modifier
+                            .widthIn(max = 800.dp) // Match the max width of chat content
+                            .fillMaxWidth()
+                    )
+                }
+            }
+        }
+    }
+}
+
+// Web-optimized chat message bubble with better spacing
+@Composable
+private fun WebChatMessageBubble(
+    message: ChatMessage,
+    modifier: Modifier = Modifier
+) {
+    if (message.fromUser) {
+        // User message - aligned to the right with blue background
+        Row(
+            modifier = modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.End
+        ) {
+            Box(
+                modifier = Modifier
+                    .background(
+                        color = MaterialTheme.colorScheme.primary,
+                        shape = RoundedCornerShape(16.dp)
+                    )
+                    .padding(horizontal = 20.dp, vertical = 12.dp)
+                    .widthIn(max = 480.dp) // Wider max width for web
+            ) {
+                Text(
+                    text = message.text,
+                    color = MaterialTheme.colorScheme.onPrimary,
+                    style = MaterialTheme.typography.bodyLarge
+                )
+            }
+        }
+    } else {
+        // AI message - aligned to the left with avatar and gray background
+        Row(
+            modifier = modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.Start,
+            verticalAlignment = Alignment.Top
+        ) {
+            // AI Avatar
+            Box(
+                modifier = Modifier
+                    .size(40.dp) // Slightly larger for web
+                    .background(
+                        color = MaterialTheme.colorScheme.secondaryContainer,
+                        shape = CircleShape
+                    ),
+                contentAlignment = Alignment.Center
+            ) {
+                Text(
+                    text = "AI",
+                    color = MaterialTheme.colorScheme.onSecondaryContainer,
+                    style = MaterialTheme.typography.labelMedium,
+                    fontWeight = FontWeight.Bold
+                )
+            }
+            
+            Spacer(modifier = Modifier.width(16.dp))
+            
+            // Message bubble
+            Box(
+                modifier = Modifier
+                    .background(
+                        color = MaterialTheme.colorScheme.surfaceVariant,
+                        shape = RoundedCornerShape(16.dp)
+                    )
+                    .padding(horizontal = 20.dp, vertical = 12.dp)
+                    .widthIn(max = 480.dp) // Wider max width for web
+            ) {
+                Text(
+                    text = message.text,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    style = MaterialTheme.typography.bodyLarge
+                )
+            }
+        }
+    }
 }
